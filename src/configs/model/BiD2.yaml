@@ -1,0 +1,44 @@
+embedding_size: 64
+feat_embed_dim: 64
+
+n_mm_layers: 1
+n_layers: 2
+knn_k: 10
+mm_image_weight: 0.1
+learning_rate: [0.0001]
+reg_weight: [0.001]
+
+#dropout: [0.3 0.5]
+#dropout: [0.1, 0.3, 0.5, 0.7]
+dropout: [0.5]
+
+#mask_weight_f: [1, 2]
+#mask_weight_f: [1, 1.5, 2, 2.5, 3]
+mask_weight_f: [1.5]
+
+#mask_weight_g: [0, 0.01, 0.1]
+#mask_weight_g: [0.01, 0.001, 0]
+#mask_weight_g: [0.0001, 0.001]
+mask_weight_g: [0.0001]
+
+#align_weight: [0.1, 0.2, 0.3]
+align_weight: [0.1]
+
+#temp: [0.2, 0.4, 0.8]
+#temp: [0.2, 0.4, 0.6]
+temp: [0.6]
+#temp: [0.1]
+
+#distill_temp: [0.5]
+distill_temp: [0.02]
+#distill_temp: [0.005,0.01,0.02,0.05,0.1]
+#distill_temp: [0.02]
+#distill_weight: [0.01]
+#distill_weight: [0.001, 0.005, 0.01, 0.02, 0.05]
+distill_weight: [0.05]
+#distill_weight: [0.05]
+contrast_temp: [0.1]  # 精简为4个点，覆盖所有最优值
+contrast_weight: [0.49]  # 精简为4个点，覆盖所有最优值
+
+
+hyper_parameters: ["reg_weight", "learning_rate", 'dropout', 'mask_weight_f', 'mask_weight_g', 'align_weight', 'temp','distill_temp','distill_weight','contrast_temp','contrast_weight']
