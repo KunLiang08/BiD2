@@ -26,7 +26,7 @@ class BiD2(GeneralRecommender):
         batch_size = config['train_batch_size']  # not used
         dim_x = config['embedding_size']
         self.feat_embed_dim = config['feat_embed_dim']
-        self.n_layers = config['n_mm_layers'] # 从配置中获取多层感知器（MLP）的层数
+        self.n_layers = config['n_mm_layers'] 
         self.knn_k = config['knn_k']
         self.mm_image_weight = config['mm_image_weight']
 
@@ -66,18 +66,18 @@ class BiD2(GeneralRecommender):
         self.contrast_temp = config['contrast_temp']
         self.contrast_weight = config['contrast_weight']
 
-        if self.v_feat is not None: #物品的
-            self.image_embedding = nn.Embedding.from_pretrained(self.v_feat, freeze=False) #每个样本的索引会映射到对应的预训练特征向量
-            self.image_trs = nn.Linear(self.v_feat.shape[1], self.feat_embed_dim) #将图像特征维度（self.v_feat.shape[1]）转换为统一的 feat_embed_dim
+        if self.v_feat is not None: 
+            self.image_embedding = nn.Embedding.from_pretrained(self.v_feat, freeze=False) 
+            self.image_trs = nn.Linear(self.v_feat.shape[1], self.feat_embed_dim) 
         if self.t_feat is not None:
             self.text_embedding = nn.Embedding.from_pretrained(self.t_feat, freeze=False)
             self.text_trs = nn.Linear(self.t_feat.shape[1], self.feat_embed_dim)
 
-        if os.path.exists(mm_adj_file):   #加载生成 邻接矩阵 物品-物品关系图 融合视觉和文本模态的图结构
+        if os.path.exists(mm_adj_file):   
             self.mm_adj = torch.load(mm_adj_file)
         else:
             if self.v_feat is not None:
-                indices, image_adj = self.get_knn_adj_mat(self.image_embedding.weight.detach()) #构建K近邻（KNN）邻接矩阵
+                indices, image_adj = self.get_knn_adj_mat(self.image_embedding.weight.detach()) 
                 self.mm_adj = image_adj
             if self.t_feat is not None:
                 indices, text_adj = self.get_knn_adj_mat(self.text_embedding.weight.detach())
@@ -94,7 +94,7 @@ class BiD2(GeneralRecommender):
         self.edge_index = torch.tensor(edge_index, dtype=torch.long).t().contiguous().to(self.device)
         self.edge_index = torch.cat((self.edge_index, self.edge_index[[1, 0]]), dim=1)
 
-        # pdb.set_trace() 定义两个可训练的注意力权重，并通过Softmax归一化确保权重和为1
+        # pdb.set_trace() 
         self.weight_u = nn.Parameter(nn.init.xavier_normal_(
             torch.tensor(np.random.randn(self.num_user, 2, 1), dtype=torch.float32, requires_grad=True)))
         self.weight_u.data = F.softmax(self.weight_u, dim=1)
@@ -109,43 +109,43 @@ class BiD2(GeneralRecommender):
             self.item_index[i] = i
             index.append(i)
         self.drop_percent = self.drop_rate
-        self.single_percent = 1 #控制单任务与双任务训练的比例
+        self.single_percent = 1 
         self.double_percent = 0
             #随机选择丢弃项
         drop_item = torch.tensor(
             np.random.choice(self.item_index, int(self.num_item * self.drop_percent), replace=False))
-        drop_item_single = drop_item[:int(self.single_percent * len(drop_item))] #分配丢弃项到单任务
-        #将单任务中的丢弃项按固定比例分配给视觉和文本模态，用于模拟不同模态的特征缺失，从而提升模型对多模态数据的鲁棒性
+        drop_item_single = drop_item[:int(self.single_percent * len(drop_item))] 
+       
         self.dropv_node_idx_single = drop_item_single[:int(len(drop_item_single) * 1 / 3)]
         self.dropt_node_idx_single = drop_item_single[int(len(drop_item_single) * 2 / 3):]
 
         self.dropv_node_idx = self.dropv_node_idx_single
         self.dropt_node_idx = self.dropt_node_idx_single
 
-        mask_cnt = torch.zeros(self.num_item, dtype=int).tolist() #创建了一个用于记录每个项目（item）被遮蔽（mask）次数的计数器列表
-        for edge in edge_index: #统计图中项目节点作为目标节点的出现次数
+        mask_cnt = torch.zeros(self.num_item, dtype=int).tolist() 
+        for edge in edge_index: 
             mask_cnt[edge[1] - self.num_user] += 1
         mask_dropv = []
         mask_dropt = []
-        for idx, num in enumerate(mask_cnt): #为每个项目生成视觉模态（Visual）和文本模态（Textual）的遮蔽标记列表
+        for idx, num in enumerate(mask_cnt): 
             temp_false = [False] * num
             temp_true = [True] * num
             mask_dropv.extend(temp_false) if idx in self.dropv_node_idx else mask_dropv.extend(temp_true)
             mask_dropt.extend(temp_false) if idx in self.dropt_node_idx else mask_dropt.extend(temp_true)
 
-        edge_index = edge_index[np.lexsort(edge_index.T[1, None])] #对边列表按目标节点排序
-        edge_index_dropv = edge_index[mask_dropv] #根据掩码筛选视觉模态遮蔽的边
+        edge_index = edge_index[np.lexsort(edge_index.T[1, None])] 
+        edge_index_dropv = edge_index[mask_dropv] 
         edge_index_dropt = edge_index[mask_dropt]
 
         self.edge_index_dropv = torch.tensor(edge_index_dropv).t().contiguous().to(self.device)
         self.edge_index_dropt = torch.tensor(edge_index_dropt).t().contiguous().to(self.device)
 
-        self.edge_index_dropv = torch.cat((self.edge_index_dropv, self.edge_index_dropv[[1, 0]]), dim=1) #将正向边和反向边拼接，形成无向图的边索引
+        self.edge_index_dropv = torch.cat((self.edge_index_dropv, self.edge_index_dropv[[1, 0]]), dim=1) 
         self.edge_index_dropt = torch.cat((self.edge_index_dropt, self.edge_index_dropt[[1, 0]]), dim=1)
 
-        self.MLP_user = nn.Linear(self.dim_latent * 2, self.dim_latent) # 定义用户MLP层
+        self.MLP_user = nn.Linear(self.dim_latent * 2, self.dim_latent) 
 
-        if self.v_feat is not None: #初始化三个独立的 图卷积网络（GCN） 实例，用于处理视觉模态的图数据
+        if self.v_feat is not None: 
             self.v_gcn = GCN(self.dataset, batch_size, num_user, num_item, dim_x, self.aggr_mode, dim_latent=64,
                              device=self.device, features=self.v_feat)
             self.v_gcn_n1 = GCN(self.dataset, batch_size, num_user, num_item, dim_x, self.aggr_mode, dim_latent=64,
@@ -159,15 +159,15 @@ class BiD2(GeneralRecommender):
                              device=self.device, features=self.t_feat)
             self.t_gcn_n2 = GCN(self.dataset, batch_size, num_user, num_item, dim_x, self.aggr_mode, dim_latent=64,
                                 device=self.device, features=self.t_feat)
-        #定义了一个可训练的物品特征矩阵，作为物品的初始特征表示，后续通过 GCN 进一步学习优化
+       
         self.id_feat = nn.Parameter(
             nn.init.xavier_normal_(torch.tensor(np.random.randn(self.n_items, self.dim_latent), dtype=torch.float32,
                                                 requires_grad=True), gain=1).to(self.device))
         self.id_gcn = GCN(self.dataset, batch_size, num_user, num_item, dim_x, self.aggr_mode,
-                          dim_latent=64, device=self.device, features=self.id_feat) #在用户-物品交互图上进行消息传递，聚合邻居节点（如用户交互过的物品）的信息。
+                          dim_latent=64, device=self.device, features=self.id_feat) 
 
 
-        #定义了多个用户和物品的可学习嵌入矩阵，用于推荐系统中多视角或多层次的表示学习
+       
         self.result_embed = nn.Parameter(
             nn.init.xavier_normal_(torch.tensor(np.random.randn(num_user + num_item, dim_x)))).to(self.device)
 
@@ -183,16 +183,14 @@ class BiD2(GeneralRecommender):
             nn.init.xavier_normal_(torch.tensor(np.random.randn(num_user + num_item, dim_x)))).to(self.device)
 
     def enhanced_contrastive_learning(self, anchor, pos, neg):
-        # 归一化嵌入
+
         anchor = F.normalize(anchor, dim=1)
         pos = F.normalize(pos, dim=1)
         neg = F.normalize(neg, dim=1)
 
-        # 计算相似度分数
         pos_score = torch.sum(anchor * pos, dim=1) / self.contrast_temp
         neg_score = torch.sum(anchor * neg, dim=1) / self.contrast_temp
 
-        # 计算对比损失
         cl_loss = -torch.log(
             torch.exp(pos_score) /
             (torch.exp(pos_score) + torch.exp(neg_score))
@@ -200,39 +198,39 @@ class BiD2(GeneralRecommender):
 
         return cl_loss * self.contrast_weight
     def get_knn_adj_mat(self, mm_embeddings):
-        context_norm = mm_embeddings.div(torch.norm(mm_embeddings, p=2, dim=-1, keepdim=True)) #对每个节点的嵌入进行 L2归一化，使其成为单位向量
+        context_norm = mm_embeddings.div(torch.norm(mm_embeddings, p=2, dim=-1, keepdim=True)) 
         sim = torch.mm(context_norm, context_norm.transpose(1, 0))
-        _, knn_ind = torch.topk(sim, self.knn_k, dim=-1) #沿每行选择相似度最高的 self.knn_k 个邻居节点
+        _, knn_ind = torch.topk(sim, self.knn_k, dim=-1) 
         adj_size = sim.size()
         del sim
-        # construct sparse adj 生成COO格式的稀疏邻接矩阵索引
+
         indices0 = torch.arange(knn_ind.shape[0]).to(self.device)
         indices0 = torch.unsqueeze(indices0, 1)
         indices0 = indices0.expand(-1, self.knn_k)
         indices = torch.stack((torch.flatten(indices0), torch.flatten(knn_ind)), 0)
         # norm
-        return indices, self.compute_normalized_laplacian(indices, adj_size) #计算归一化拉普拉斯矩阵
+        return indices, self.compute_normalized_laplacian(indices, adj_size) 
 
     def compute_normalized_laplacian(self, indices, adj_size):
-        adj = torch.sparse.FloatTensor(indices, torch.ones_like(indices[0]), adj_size) #构建稀疏邻接矩阵
-        row_sum = 1e-7 + torch.sparse.sum(adj, -1).to_dense() #计算度矩阵的对角元素
+        adj = torch.sparse.FloatTensor(indices, torch.ones_like(indices[0]), adj_size) 
+        row_sum = 1e-7 + torch.sparse.sum(adj, -1).to_dense() 
         r_inv_sqrt = torch.pow(row_sum, -0.5)
         rows_inv_sqrt = r_inv_sqrt[indices[0]]
         cols_inv_sqrt = r_inv_sqrt[indices[1]]
-        values = rows_inv_sqrt * cols_inv_sqrt#为每条边赋归一化权重
-        return torch.sparse.FloatTensor(indices, values, adj_size) #返回对称归一化拉普拉斯矩阵
+        values = rows_inv_sqrt * cols_inv_sqrt
+        return torch.sparse.FloatTensor(indices, values, adj_size) 
 
-    def pre_epoch_processing(self): #构建用户-用户关系图
+    def pre_epoch_processing(self): 
         self.epoch_user_graph, self.user_weight_matrix = self.topk_sample(self.k)
         self.user_weight_matrix = self.user_weight_matrix.to(self.device)
 
-    def pack_edge_index(self, inter_mat): #将交互矩阵转换为边列表（edge list）格式
+    def pack_edge_index(self, inter_mat): 
         rows = inter_mat.row
         cols = inter_mat.col + self.n_users
         # ndarray([598918, 2]) for ml-imdb
-        return np.column_stack((rows, cols))# 将源节点和目标节点拼接成二维数组，形成边列表
+        return np.column_stack((rows, cols))
 
-    def InfoNCE(self, view1, view2, temp): #对比学习损失，通过最大化两个视图（view1和view2）中正样本对的互信息来优化模型。
+    def InfoNCE(self, view1, view2, temp): 
         view1, view2 = F.normalize(view1, dim=1), F.normalize(view2, dim=1)
         pos_score = (view1 * view2).sum(dim=-1)
         pos_score = torch.exp(pos_score / temp)
@@ -246,40 +244,39 @@ class BiD2(GeneralRecommender):
         pos_item_nodes += self.n_users
         neg_item_nodes += self.n_users
 
-        # GCN for id, v, t modalities 实现了基于图卷积网络（GCN）的多模态特征提取
-        self.v_rep, self.v_preference = self.v_gcn(self.edge_index_dropv, self.edge_index, self.v_feat) # 带噪声的图结构（训练专用），完整的图结构（推理专用），视觉特征矩阵
+        self.v_rep, self.v_preference = self.v_gcn(self.edge_index_dropv, self.edge_index, self.v_feat) 
         self.t_rep, self.t_preference = self.t_gcn(self.edge_index_dropt, self.edge_index, self.t_feat)
         self.id_rep, self.id_preference = self.id_gcn(self.edge_index_dropt, self.edge_index, self.id_feat)
 
-        # random noise GCN for v and t   perturbed=True启用扰动机制（如动态边丢弃），增强模型对图结构噪声的鲁棒性。
+        # random noise GCN for v and t   perturbed=True
         self.v_rep_n1, _ = self.v_gcn_n1(self.edge_index_dropv, self.edge_index, self.v_feat, perturbed=True)
         self.t_rep_n1, _ = self.t_gcn_n1(self.edge_index_dropt, self.edge_index, self.t_feat, perturbed=True)
         self.v_rep_n2, _ = self.v_gcn_n2(self.edge_index_dropv, self.edge_index, self.v_feat, perturbed=True)
         self.t_rep_n2, _ = self.t_gcn_n2(self.edge_index_dropt, self.edge_index, self.t_feat, perturbed=True)
 
-        # v, v, id, and vt modalities 拼接不同张量来构建多模态表示
-        representation = torch.cat((self.v_rep, self.t_rep), dim=1) #实现多模态特征融合
+        # v, v, id, and vt modalities 
+        representation = torch.cat((self.v_rep, self.t_rep), dim=1) 
         guide_representation = torch.cat((self.id_rep, self.id_rep), dim=1)
-        v_representation = torch.cat((self.v_rep, self.v_rep), dim=1) #分别对视觉和文本表示进行自我拼接
+        v_representation = torch.cat((self.v_rep, self.v_rep), dim=1) 
         t_representation = torch.cat((self.t_rep, self.t_rep), dim=1)
 
-        # noise rep 将同一分支下的视觉特征与文本特征沿特征维度拼接
+        # noise rep 
         representation_n1 = torch.cat((self.v_rep_n1, self.t_rep_n1), dim=1)
         representation_n2 = torch.cat((self.v_rep_n2, self.t_rep_n2), dim=1)
 
-        self.v_rep = torch.unsqueeze(self.v_rep, 2) #为三个特征张量（视觉、文本、ID）添加了一个新的维度
+        self.v_rep = torch.unsqueeze(self.v_rep, 2) 
         self.t_rep = torch.unsqueeze(self.t_rep, 2)
         self.id_rep = torch.unsqueeze(self.id_rep, 2)
 
         user_rep = torch.cat((self.v_rep[:self.num_user], self.t_rep[:self.num_user]), dim=2)
-        user_rep = self.weight_u.transpose(1, 2) * user_rep #应用权重矩阵并转换
+        user_rep = self.weight_u.transpose(1, 2) * user_rep 
         user_rep = torch.cat((user_rep[:, :, 0], user_rep[:, :, 1]), dim=1)
 
 
         guide_user_rep = torch.cat((self.id_rep[:self.num_user], self.id_rep[:self.num_user]), dim=2)
         # guide_user_rep = self.weight_u.transpose(1, 2) * guide_user_rep
         guide_user_rep = torch.cat((guide_user_rep[:, :, 0], guide_user_rep[:, :, 1]), dim=1)
-        #用于单模态的对比学习或单独分析视觉/文本特征。
+
         v_user_rep = torch.cat((self.v_rep[:self.num_user], self.v_rep[:self.num_user]), dim=2)
         # v_user_rep = self.weight_u.transpose(1, 2) * v_user_rep
         v_user_rep = torch.cat((v_user_rep[:, :, 0], v_user_rep[:, :, 1]), dim=1)
@@ -293,7 +290,7 @@ class BiD2(GeneralRecommender):
         self.t_rep_n1 = torch.unsqueeze(self.t_rep_n1, 2)
         user_rep_n1 = torch.cat((self.v_rep_n1[:self.num_user], self.t_rep_n1[:self.num_user]), dim=2)
         user_rep_n1 = self.weight_u.transpose(1, 2) * user_rep_n1
-        user_rep_n1 = torch.cat((user_rep_n1[:, :, 0], user_rep_n1[:, :, 1]), dim=1) #将用户数量翻倍，便于在下游任务（如推荐系统）中区分不同模态的贡献。
+        user_rep_n1 = torch.cat((user_rep_n1[:, :, 0], user_rep_n1[:, :, 1]), dim=1) 
 
         # noise rep2
         self.v_rep_n2 = torch.unsqueeze(self.v_rep_n2, 2)
@@ -319,16 +316,16 @@ class BiD2(GeneralRecommender):
         h_n2 = self.buildItemGraph(item_rep_n2)
 
         user_rep = user_rep
-        item_rep = item_rep + h #与通过图神经网络（GNN）计算得到的隐式关联特征 h 相加
+        item_rep = item_rep + h 
 
-        item_rep_n1 = item_rep_n1 + h_n1  # 叠加噪声图特征
+        item_rep_n1 = item_rep_n1 + h_n1  
         item_rep_n2 = item_rep_n2 + h_n2
 
         guide_item_rep = guide_item_rep + h_guide
         v_item_rep = v_item_rep + h_v
         t_item_rep = t_item_rep + h_t
 
-        # build result embedding 构建多模态的物品与用户嵌入表示，通过拼接不同来源的表征来整合多样化的信息
+        # build result embedding 
         self.user_rep = user_rep
         self.item_rep = item_rep
         self.result_embed = torch.cat((user_rep, item_rep), dim=0)
@@ -353,7 +350,7 @@ class BiD2(GeneralRecommender):
         self.item_rep_n2 = item_rep_n2
         self.result_embed_n2 = torch.cat((user_rep_n2, item_rep_n2), dim=0)
 
-        # calculate pos and neg scores 计算用户与正/负例物品之间的相似度分数，常用于推荐系统的损失函数（如BPR Loss）
+        # calculate pos and neg scores 
         user_tensor = self.result_embed[user_nodes]
         pos_item_tensor = self.result_embed[pos_item_nodes]
         neg_item_tensor = self.result_embed[neg_item_nodes]
@@ -361,14 +358,14 @@ class BiD2(GeneralRecommender):
         neg_scores = torch.sum(user_tensor * neg_item_tensor, dim=1)
         return pos_scores, neg_scores
 
-    def buildItemGraph(self, h): #通过多层稀疏矩阵乘法对输入特征进行图结构上的传播和聚合
+    def buildItemGraph(self, h): 
         for i in range(self.n_layers):
             h = torch.sparse.mm(self.mm_adj, h)
         return h
 
-    def fit_Gaussian_dis(self): #为四组不同的嵌入向量分别计算高斯分布的均值和方差
-        r_var = torch.var(self.result_embed) # 原始嵌入的方差
-        r_mean = torch.mean(self.result_embed) # 原始嵌入的均值
+    def fit_Gaussian_dis(self):
+        r_var = torch.var(self.result_embed) 
+        r_mean = torch.mean(self.result_embed) 
         g_var = torch.var(self.result_embed_guide)
         g_mean = torch.mean(self.result_embed_guide)
         v_var = torch.var(self.result_embed_v)
@@ -379,8 +376,8 @@ class BiD2(GeneralRecommender):
 
     def calculate_loss(self, interaction):
         user = interaction[0]
-        pos_scores, neg_scores = self.forward(interaction) # 前向传播，计算正样本和负样本的分数
-        loss_value = -torch.mean(torch.log2(torch.sigmoid(pos_scores - neg_scores))) # 计算损失值，使用log2(sigmoid)函数
+        pos_scores, neg_scores = self.forward(interaction) 
+        loss_value = -torch.mean(torch.log2(torch.sigmoid(pos_scores - neg_scores))) 
 
         # reg 正则化损失
         reg_embedding_loss_v = (self.v_preference[user] ** 2).mean() if self.v_preference is not None else 0.0
@@ -388,11 +385,10 @@ class BiD2(GeneralRecommender):
         reg_loss = self.reg_weight * (reg_embedding_loss_v + reg_embedding_loss_t)
         reg_loss += self.reg_weight * (self.weight_u ** 2).mean()
 
-        # mask 基于特征掩码的正则化方法
-        with torch.no_grad(): #禁用梯度跟踪
-            u_temp, i_temp = self.user_rep.clone(), self.item_rep.clone() #创建 user_rep 和 item_rep 的独立副本，避免直接修改原始张量
+        with torch.no_grad(): 
+            u_temp, i_temp = self.user_rep.clone(), self.item_rep.clone() 
             u_temp2, i_temp2 = self.user_rep.clone(), self.item_rep.clone()
-            u_temp.detach() #进一步确保这些副本与计算图分离，完全隔离梯度传播
+            u_temp.detach() 
             i_temp.detach()
             u_temp2.detach()
             i_temp2.detach()
@@ -400,24 +396,20 @@ class BiD2(GeneralRecommender):
             i_temp2 = self.mlp(i_temp2)
             u_temp = F.dropout(u_temp, self.dropout)
             i_temp = F.dropout(i_temp, self.dropout)
-        mask_loss_u = 1 - F.cosine_similarity(u_temp, u_temp2).mean() #计算掩码损失
+        mask_loss_u = 1 - F.cosine_similarity(u_temp, u_temp2).mean() 
         mask_loss_i = 1 - F.cosine_similarity(i_temp, i_temp2).mean()
         mask_f_loss = self.mask_weight_f * (mask_loss_i + mask_loss_u)
 
-        # 在计算 align_loss 之前添加以下代码
-
         # Knowledge Distillation Loss
         # Forward distillation: ID -> Visual/Text
-        id_emb = self.result_embed_guide  # ID模态的嵌入
-        v_emb = self.result_embed_v       # 视觉模态的嵌入
-        t_emb = self.result_embed_t       # 文本模态的嵌入
+        id_emb = self.result_embed_guide  
+        v_emb = self.result_embed_v       
+        t_emb = self.result_embed_t      
 
-        # 对嵌入进行归一化
         id_emb = F.normalize(id_emb, dim=1)
         v_emb = F.normalize(v_emb, dim=1)
         t_emb = F.normalize(t_emb, dim=1)
 
-        # 正向蒸馏损失 (ID -> V/T)
         forward_distill_v = F.kl_div(
             F.log_softmax(v_emb / self.distill_temp, dim=1),
             F.softmax(id_emb / self.distill_temp, dim=1),
@@ -430,8 +422,7 @@ class BiD2(GeneralRecommender):
             reduction='batchmean'
         ) * (self.temp ** 2)
 
-        # 反向蒸馏损失 (V+T -> ID)
-        fused_emb = self.result_embed  # 融合模态的嵌入
+        fused_emb = self.result_embed  
         fused_emb = F.normalize(fused_emb, dim=1)
 
         backward_distill = F.kl_div(
@@ -440,48 +431,10 @@ class BiD2(GeneralRecommender):
             reduction='batchmean'
         ) * (self.temp ** 2)
 
-        # 总蒸馏损失
         distill_loss = (forward_distill_v + forward_distill_t + backward_distill) * self.distill_weight
         # guide
-        # 粗粒度-分布
-        r_var, r_mean, g_var, g_mean, v_var, v_mean, t_var, t_mean = self.fit_Gaussian_dis()# 调用 fit_Gaussian_dis 方法来拟合高斯分布，并获取各个变量和均值
-        # id and v+t之间的差异损失计算
-        # dis_loss_i_vt = (torch.abs(g_var - r_var) +
-        #                  torch.abs(g_mean - r_mean)).mean()
-        # # id and v
-        # dis_loss_i_v = (torch.abs(g_var - v_var) +
-        #                 torch.abs(g_mean - v_mean)).mean()
-        # # id and t
-        # dis_loss_i_t = (torch.abs(g_var - t_var) +
-        #                 torch.abs(g_mean - t_mean)).mean()
-        #
-        # # v and v+t
-        # dis_loss_v_vt = (torch.abs(r_var - v_var) +
-        #                  torch.abs(r_mean - v_mean)).mean()
-        #
-        # # t and v+t
-        # dis_loss_t_vt = (torch.abs(r_var - t_var) +
-        #                  torch.abs(r_mean - t_mean)).mean()
-        #
-        # # v and t
-        # dis_loss_v_t = (torch.abs(v_var - t_var) +
-        #                 torch.abs(v_mean - t_mean)).mean()
-        #
-        # # total
-        # dis_loss = (dis_loss_i_vt + dis_loss_i_v + dis_loss_i_t
-        #             + dis_loss_v_vt + dis_loss_t_vt
-        #             + dis_loss_v_t)
-
-        # level4直接约束模态间的独立性
-        # dis_loss = (dis_loss_v_t)
-        # level3融合分布与单一模态的一致性
-        # dis_loss = (dis_loss_v_vt + dis_loss_t_vt)
-        # level2确保基准分布独立地接近每个单一模态的分布
-        # dis_loss = (dis_loss_i_v + dis_loss_i_t)
-        # level1要求基准分布（id，如全局统计量）与融合后的特征分布（v+t）尽可能一致。
-        # dis_loss = dis_loss_i_vt
-        #最小化不同分布之间的均值（mean）和方差（var）的差异，从而强制这些分布在特征空间中对齐
-
+        r_var, r_mean, g_var, g_mean, v_var, v_mean, t_var, t_mean = self.fit_Gaussian_dis()
+        
         align_loss = ((torch.abs(g_var - r_var) +
                          torch.abs(g_mean - r_mean)).mean() +
                         (torch.abs(g_var - v_var) +
@@ -495,7 +448,6 @@ class BiD2(GeneralRecommender):
                     (torch.abs(v_var - t_var) +
                      torch.abs(v_mean - t_mean)).mean())
 
-        # 图噪音cl
         # inspired by SimGCL
         mask_g_loss = (self.InfoNCE(self.result_embed_n1[:self.n_users], self.result_embed_n2[:self.n_users], self.temp)
                        + self.InfoNCE(self.result_embed_n1[self.n_users:], self.result_embed_n2[self.n_users:], self.temp))
@@ -511,48 +463,46 @@ class BiD2(GeneralRecommender):
             self.result_embed_n2
         )
 
-        #主任务损失 (loss_value) 正则化损失 (reg_loss) 对齐损失 (align_loss) 掩码相关损失 (mask_f_loss & mask_g_loss)
         return loss_value + reg_loss + align_loss + mask_f_loss + mask_g_loss + distill_loss + cl_loss
 
         # return loss_value + reg_loss
-    #为指定用户计算其对所有候选物品的预测评分
     def full_sort_predict(self, interaction):
         user_tensor = self.result_embed[:self.n_users]
         item_tensor = self.result_embed[self.n_users:]
 
-        temp_user_tensor = user_tensor[interaction[0], :] #提取目标用户的嵌入
-        score_matrix = torch.matmul(temp_user_tensor, item_tensor.t()) #得到用户对每个物品的相似度评分（内积形式）
+        temp_user_tensor = user_tensor[interaction[0], :] 
+        score_matrix = torch.matmul(temp_user_tensor, item_tensor.t()) 
         return score_matrix
-    #为每个用户生成固定长度的Top-K采样结果及对应权重
+   
     def topk_sample(self, k):
-        user_graph_index = [] #填充每个用户的Top-K候选商品ID
+        user_graph_index = [] 
         count_num = 0
         user_weight_matrix = torch.zeros(len(self.user_graph_dict), k)
         tasike = []
         for i in range(k):
-            tasike.append(0) #每次循环将 0 添加到列表 tasike 的末尾
+            tasike.append(0) 
         for i in range(len(self.user_graph_dict)):
             if len(self.user_graph_dict[i][0]) < k:
-                count_num += 1  # 统计候选数不足的用户数
+                count_num += 1  
                 if len(self.user_graph_dict[i][0]) == 0:
                     # pdb.set_trace()
-                    user_graph_index.append(tasike) # 无候选时用占位符填充
+                    user_graph_index.append(tasike) 
                     continue
-                user_graph_sample = self.user_graph_dict[i][0][:k] # 获取当前用户的前k个候选
-                user_graph_weight = self.user_graph_dict[i][1][:k] # 获取当前用户前k个候选的权重
-                while len(user_graph_sample) < k: # 如果候选数仍不足k
-                    rand_index = np.random.randint(0, len(user_graph_sample)) # 随机选择一个已有候选的索引
+                user_graph_sample = self.user_graph_dict[i][0][:k] 
+                user_graph_weight = self.user_graph_dict[i][1][:k] 
+                while len(user_graph_sample) < k: 
+                    rand_index = np.random.randint(0, len(user_graph_sample)) 
                     user_graph_sample.append(user_graph_sample[rand_index])
                     user_graph_weight.append(user_graph_weight[rand_index])
                 user_graph_index.append(user_graph_sample)
 
                 user_weight_matrix[i] = F.softmax(torch.tensor(user_graph_weight), dim=0)  # softmax
                 continue
-            user_graph_sample = self.user_graph_dict[i][0][:k] # 获取第i个用户的前k个图样本
+            user_graph_sample = self.user_graph_dict[i][0][:k] 
             user_graph_weight = self.user_graph_dict[i][1][:k]
 
-            user_weight_matrix[i] = F.softmax(torch.tensor(user_graph_weight), dim=0)  # softmax
-            user_graph_index.append(user_graph_sample) ## 将用户图采样结果添加到user_graph_index列表中
+            user_weight_matrix[i] = F.softmax(torch.tensor(user_graph_weight), dim=0)  
+            user_graph_index.append(user_graph_sample) 
 
         # pdb.set_trace()
         return user_graph_index, user_weight_matrix
@@ -622,14 +572,14 @@ class Base_gcn(MessagePassing):
             # edge_index, _ = add_self_loops(edge_index, num_nodes=x.size(0))
         x = x.unsqueeze(-1) if x.dim() == 1 else x
         # pdb.set_trace()
-        return self.propagate(edge_index, size=(x.size(0), x.size(0)), x=x) #基于边索引和节点特征聚合邻居信息
+        return self.propagate(edge_index, size=(x.size(0), x.size(0)), x=x) 
 
-    def message(self, x_j, edge_index, size): #实现了图卷积网络（GCN）中常用的对称归一化策略，优化消息传递过程
+    def message(self, x_j, edge_index, size): 
         if self.aggr == 'add':
             # pdb.set_trace()
             row, col = edge_index
-            deg = degree(row, size[0], dtype=x_j.dtype) #计算节点出度
-            deg_inv_sqrt = deg.pow(-0.5) #计算度数的负平方根
+            deg = degree(row, size[0], dtype=x_j.dtype) 
+            deg_inv_sqrt = deg.pow(-0.5) 
             norm = deg_inv_sqrt[row] * deg_inv_sqrt[col]
             return norm.view(-1, 1) * x_j
         return x_j
