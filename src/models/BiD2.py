@@ -111,7 +111,7 @@ class BiD2(GeneralRecommender):
         self.drop_percent = self.drop_rate
         self.single_percent = 1 
         self.double_percent = 0
-            #随机选择丢弃项
+
         drop_item = torch.tensor(
             np.random.choice(self.item_index, int(self.num_item * self.drop_percent), replace=False))
         drop_item_single = drop_item[:int(self.single_percent * len(drop_item))] 
@@ -379,7 +379,6 @@ class BiD2(GeneralRecommender):
         pos_scores, neg_scores = self.forward(interaction) 
         loss_value = -torch.mean(torch.log2(torch.sigmoid(pos_scores - neg_scores))) 
 
-        # reg 正则化损失
         reg_embedding_loss_v = (self.v_preference[user] ** 2).mean() if self.v_preference is not None else 0.0
         reg_embedding_loss_t = (self.t_preference[user] ** 2).mean() if self.t_preference is not None else 0.0
         reg_loss = self.reg_weight * (reg_embedding_loss_v + reg_embedding_loss_t)
